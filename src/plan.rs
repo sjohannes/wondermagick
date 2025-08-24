@@ -8,7 +8,7 @@ use crate::arg_parsers::FileFormat;
 use crate::arg_parsers::{
     parse_numeric_arg, CropGeometry, IdentifyFormat, InputFileArg, Location, ResizeGeometry,
 };
-use crate::args::Arg;
+use crate::args::{Arg, ArgSign};
 use crate::decode::decode;
 use crate::utils::filename::insert_suffix_before_extension_in_path;
 use crate::{encode, wm_err};
@@ -26,13 +26,18 @@ pub struct ExecutionPlan {
 }
 
 impl ExecutionPlan {
-    pub fn apply_arg(&mut self, arg: Arg, value: Option<&OsStr>) -> Result<(), MagickError> {
+    pub fn apply_arg(
+        &mut self,
+        sign: ArgSign,
+        arg: Arg,
+        value: Option<&OsStr>,
+    ) -> Result<(), MagickError> {
         let arg_string: &'static str = arg.into();
         if arg.needs_value() != value.is_some() {
             return Err(wm_err!("argument requires a value: {arg_string}"));
         };
 
-        self.apply_arg_inner(arg, value).map_err(|arg_err| {
+        self.apply_arg_inner(sign, arg, value).map_err(|arg_err| {
             wm_err!(
                 "{}",
                 arg_err.display_with_arg(arg_string, value.unwrap_or_default())
@@ -44,7 +49,12 @@ impl ExecutionPlan {
 
     /// Currently this can only fail due to argument parsing.
     /// Split into its own function due to lack of try{} blocks on stable Rust.
-    fn apply_arg_inner(&mut self, arg: Arg, value: Option<&OsStr>) -> Result<(), ArgParseErr> {
+    fn apply_arg_inner(
+        &mut self,
+        sign: ArgSign,
+        arg: Arg,
+        value: Option<&OsStr>,
+    ) -> Result<(), ArgParseErr> {
         match arg {
             Arg::AutoOrient => self.add_operation(Operation::AutoOrient),
             Arg::Crop => {
