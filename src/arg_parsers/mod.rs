@@ -3,6 +3,8 @@
 
 mod crop;
 pub use crop::*;
+mod definition;
+pub use definition::*;
 mod resize;
 pub use resize::*;
 mod geometry;

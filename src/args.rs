@@ -37,6 +37,7 @@ pub enum Arg {
     Scale,
     Strip,
     Thumbnail,
+    Define,
 }
 
 impl Arg {
@@ -44,6 +45,7 @@ impl Arg {
         match self {
             Arg::AutoOrient => false,
             Arg::Crop => true,
+            Arg::Define => true,
             Arg::Format => true,
             Arg::Identify => false,
             Arg::Quality => true,
@@ -59,6 +61,7 @@ impl Arg {
         match self {
             Arg::AutoOrient => "automagically orient (rotate) image",
             Arg::Crop => "cut out a rectangular region of the image",
+            Arg::Define => "define one or more image format options",
             Arg::Format => "output formatted image characteristics",
             Arg::Identify => "identify the format and characteristics of the image",
             Arg::Quality => "JPEG/MIFF/PNG compression level", // I'm so sorry

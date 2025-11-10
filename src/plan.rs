@@ -1,12 +1,13 @@
 use std::{
+    collections::HashMap,
     ffi::{OsStr, OsString},
     path::PathBuf,
 };
 
 use crate::arg_parse_err::ArgParseErr;
-use crate::arg_parsers::FileFormat;
 use crate::arg_parsers::{
-    parse_numeric_arg, CropGeometry, IdentifyFormat, InputFileArg, Location, ResizeGeometry,
+    parse_numeric_arg, process_definition, CropGeometry, FileFormat, IdentifyFormat, InputFileArg,
+    Location, ResizeGeometry,
 };
 use crate::args::{Arg, ArgSign};
 use crate::decode::decode;
@@ -59,6 +60,9 @@ impl ExecutionPlan {
             Arg::AutoOrient => self.add_operation(Operation::AutoOrient),
             Arg::Crop => {
                 self.add_operation(Operation::Crop(CropGeometry::try_from(value.unwrap())?))
+            }
+            Arg::Define => {
+                process_definition(&mut self.modifiers.definitions, sign, value.unwrap())?
             }
             Arg::Identify => {
                 self.add_operation(Operation::Identify(self.modifiers.identify_format.clone()));
@@ -189,6 +193,9 @@ pub struct Modifiers {
     pub quality: Option<f64>,
     pub strip: Strip,
     pub identify_format: Option<IdentifyFormat>,
+    /// Global definitions/settings/"artifacts" set with `-define`
+    /// (see <https://imagemagick.org/script/defines.php>).
+    pub definitions: HashMap<String, OsString>,
 }
 
 #[derive(Debug, Default, Copy, Clone)] // bools default to false
