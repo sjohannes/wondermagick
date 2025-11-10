@@ -2,6 +2,7 @@ use std::io::Write;
 
 use crate::encoders::common::to_8bit_rgb_maybe_a;
 use crate::{error::MagickError, image::Image, plan::Modifiers, wm_err, wm_try};
+use image::{codecs::webp::WebPEncoder, ImageEncoder};
 use webp::{Encoder, WebPMemory};
 
 pub fn encode<W: Write>(
@@ -9,6 +10,25 @@ pub fn encode<W: Write>(
     writer: &mut W,
     modifiers: &Modifiers,
 ) -> Result<(), MagickError> {
+    if !modifiers
+        .definitions
+        .get("webp:use-libwebp")
+        .map(|value| match value.as_encoded_bytes() {
+            b"0" | b"false" => Ok(false),
+            b"1" | b"true" => Ok(true),
+            _ => Err(wm_err!("webp:use-libwebp: invalid value")),
+        })
+        .transpose()?
+        .unwrap_or(true)
+    {
+        let mut encoder = WebPEncoder::new_lossless(writer);
+        if let Some(icc) = image.icc.clone() {
+            let _ = encoder.set_icc_profile(icc); // ignore UnsupportedError
+        };
+        wm_try!(image.pixels.write_with_encoder(encoder));
+        return Ok(());
+    }
+
     // Convert the image to Rgb(a)8, because those are the only formats the encoder supports
     let pixels = to_8bit_rgb_maybe_a(&image.pixels);
 
