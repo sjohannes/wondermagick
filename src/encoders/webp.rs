@@ -11,15 +11,31 @@ pub fn encode<W: Write>(
 ) -> Result<(), MagickError> {
     // Convert the image to Rgb(a)8, because those are the only formats the encoder supports
     let pixels = to_8bit_rgb_maybe_a(&image.pixels);
-    let encoder: Encoder = Encoder::from_image(pixels.as_ref()).unwrap();
-    // imagemagick signals that the image should be lossless with quality=100
-    let lossless = modifiers.quality == Some(100.0);
-    // default quality is not documented, was determined experimentally
-    let quality = modifiers.quality.unwrap_or(75.0) as f32;
 
-    // Encode the image with the specified quality
+    // https://imagemagick.org/script/webp.php
+    let mut config = webp::WebPConfig::new().unwrap();
+    let defs = &modifiers.definitions;
+    config.lossless = match defs.get("webp:lossless").map(|s| s.as_encoded_bytes()) {
+        // If webp:lossless is unset, ImageMagick uses lossless when quality=100
+        None => i32::from(modifiers.quality == Some(100.0)),
+        Some(b"0" | b"false") => 0,
+        Some(b"1" | b"true") => 1,
+        _ => return Err(wm_err!("webp:lossless must be true, false, 1, or 0")),
+    };
+    if let Some(value) = defs.get("webp:method") {
+        config.method = value
+            .to_str()
+            .and_then(|s| s.parse().ok())
+            .ok_or_else(|| wm_err!("invalid webp:method value"))?;
+    }
+    // default quality is not documented, was determined experimentally
+    // (75 is also libwebp default)
+    config.quality = modifiers.quality.unwrap_or(75.0) as f32;
+
+    // Encode the image with the specified config
+    let encoder: Encoder = Encoder::from_image(&pixels).unwrap();
     let webp: WebPMemory = encoder
-        .encode_simple(lossless, quality)
+        .encode_advanced(&config)
         .map_err(|e| wm_err!("WebP encoding failed: {e:?}"))?;
     // TODO: `webp` crate doesn't support setting the ICC profile:
     // https://github.com/jaredforth/webp/issues/41
