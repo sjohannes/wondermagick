@@ -16,7 +16,7 @@ use std::os::windows::ffi::OsStringExt;
 
 use image::ImageFormat;
 
-use crate::{arg_parse_err::ArgParseErr, error::MagickError, wm_err};
+use crate::{arg_parse_err::ArgParseErr, error::MagickError, utils::os_str::OsStrExt as _, wm_err};
 
 use super::{Geometry, ResizeGeometry};
 
@@ -394,40 +394,14 @@ fn split_off_bracketed_suffix(input: &OsStr) -> Option<(OsString, OsString)> {
 
 /// Parses ImageMagick `format:path`-style argument.
 pub fn parse_path_and_format(input: &OsStr) -> Option<(OsString, FileFormat)> {
-    #[cfg(any(unix, target_os = "wasi"))]
-    {
-        let bytes = input.as_bytes(); // From std::os::unix::ffi::OsStrExt
-        let mut iter = bytes.splitn(2, |&b| b == b':');
-        let prefix = str::from_utf8(iter.next().unwrap()).ok()?;
-        let suffix = iter.next()?;
-        Some((
-            OsStr::from_bytes(suffix).to_owned(), // From std::os::unix::ffi::OsStrExt
-            FileFormat::from_prefix(prefix)?,
-        ))
+    let (prefix, path) = input.split_once(b':')?;
+    let prefix = prefix.into_string().ok()?;
+    // On Windows, "c:..." is a path and ImageMagick treats it as such
+    if cfg!(windows) && prefix.len() == 1 && prefix.as_bytes()[0].is_ascii_alphabetic() {
+        return None;
     }
-    #[cfg(windows)]
-    {
-        let wide_chars: Vec<u16> = input.encode_wide().collect(); // From std::os::windows::ffi::OsStrExt
-        let mut iter = wide_chars.splitn(2, |&wc| wc == b':' as u16);
-        let prefix = String::from_utf16(iter.next().unwrap()).ok()?;
-        // On Windows, ImageMagick treats "c:..." as a path
-        if prefix.len() == 1 && prefix.chars().nth(0).map(|c| c.is_ascii_alphabetic()) == Some(true)
-        {
-            return None;
-        }
-        let suffix = iter.next()?;
-        Some((
-            OsString::from_wide(suffix), // From std::os::windows::ffi::OsStringExt
-            FileFormat::from_prefix(&prefix)?,
-        ))
-    }
-    #[cfg(not(any(unix, windows, target_os = "wasi")))]
-    {
-        // Outside the above platforms, we only support splitting UTF-8
-        let input = input.to_str()?;
-        let (prefix, suffix) = input.split_once(':')?;
-        Some((OsString::from(suffix), FileFormat::from_prefix(prefix)?))
-    }
+    let format = FileFormat::from_prefix(&prefix)?;
+    Some((path, format))
 }
 
 #[cfg(test)]
